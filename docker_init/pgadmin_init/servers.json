@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "exchange",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "postgres",
+      "Username": "admin_ex",
+      "SSLMode": "prefer",
+      "PassFile": "/pgpass"
+    }
+  }
+}
