@@ -5,3 +5,4 @@ fastapi/__pycache__/
 note
 docker_volume/
 perfect_server/.env
+/log
