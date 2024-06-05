@@ -10,6 +10,10 @@ from pydantic import BaseModel
 app = FastAPI()
 
 
+class Asset(BaseModel):
+    code: str
+
+
 @app.get("/asset")
 async def get_assets():
     load_dotenv()
@@ -29,7 +33,17 @@ async def get_assets():
 
     cursor.close()
     conn.close()
-    return pd.DataFrame(count, columns=cols)
+    # return pd.DataFrame(count, columns=cols)
+    result = [Asset(code=code[0]) for code in count]
+    return result
+
+
+class Price(BaseModel):
+    code: str
+    type: str
+    price: float
+    lastUpdate: str
+    change_percentage: float
 
 
 @app.get("/price")
@@ -43,12 +57,18 @@ async def get_prices():
     cursor = conn.cursor()
 
     query = f"""
-            
-            SELECT 
-            p.code,
-            p.type,
-            p.price::float + COALESCE(e.value::float, 0) AS final_price,
-            p."lastUpdate"
+            SELECT
+            current.code,
+            current.type,
+            CAST(CAST(current.price AS float) + COALESCE(CAST(current_excess.value AS float), 0) AS numeric) AS final_price,
+            current."lastUpdate",
+            ROUND(
+                CAST(
+                    (CAST(current.price AS float) - COALESCE(CAST(prev.price AS float), CAST(current.price AS float)))
+                    / COALESCE(CAST(prev.price AS float), 1)
+                    AS numeric
+                ), 2
+            ) AS change_percentage
         FROM (
             SELECT 
                 code,
@@ -58,10 +78,23 @@ async def get_prices():
                 ROW_NUMBER() OVER (PARTITION BY code, type ORDER BY "lastUpdate" DESC) AS rn
             FROM 
                 price
-        ) p
-        LEFT JOIN excess e ON p.code = e.code AND p.type = e.type
+            WHERE code like '%IRR%'
+        ) AS current
+        LEFT JOIN excess AS current_excess ON current.code = current_excess.code AND current.type = current_excess.type
+        LEFT JOIN (
+            SELECT 
+                code,
+                type,
+                price,
+                "lastUpdate",
+                ROW_NUMBER() OVER (PARTITION BY code, type ORDER BY "lastUpdate" DESC) AS rn
+            FROM 
+                price
+        ) AS prev ON current.code = prev.code AND current.type = prev.type AND prev.rn = 2
         WHERE 
-            p.rn = 1;
+            current.rn = 1;
+
+
 
             """
     cursor.execute(query)
@@ -70,7 +103,90 @@ async def get_prices():
 
     cursor.close()
     conn.close()
-    return pd.DataFrame(count, columns=cols)
+    # return pd.DataFrame(count, columns=cols)
+    result = [
+        Price(
+            code=code[0],
+            type=code[1],
+            price=code[2],
+            lastUpdate=code[3],
+            change_percentage=code[4],
+        )
+        for code in count
+    ]
+    return result
+
+
+@app.get("/parity")
+async def get_parities():
+    load_dotenv()
+    host = os.getenv("POSTGRES_HOST")
+    database = os.getenv("DATABASE")
+    user = os.getenv("POSTGRES_USER")
+    password = os.getenv("POSTGRES_PASSWORD")
+    conn = psycopg2.connect(host=host, database=database, user=user, password=password)
+    cursor = conn.cursor()
+
+    query = f"""
+            SELECT
+            current.code,
+            current.type,
+            CAST(CAST(current.price AS float) + COALESCE(CAST(current_excess.value AS float), 0) AS numeric) AS final_price,
+            current."lastUpdate",
+            ROUND(
+                CAST(
+                    (CAST(current.price AS float) - COALESCE(CAST(prev.price AS float), CAST(current.price AS float)))
+                    / COALESCE(CAST(prev.price AS float), 1)
+                    AS numeric
+                ), 2
+            ) AS change_percentage
+        FROM (
+            SELECT 
+                code,
+                type,
+                price,
+                "lastUpdate",
+                ROW_NUMBER() OVER (PARTITION BY code, type ORDER BY "lastUpdate" DESC) AS rn
+            FROM 
+                price
+            WHERE code not like '%IRR%'
+        ) AS current
+        LEFT JOIN excess AS current_excess ON current.code = current_excess.code AND current.type = current_excess.type
+        LEFT JOIN (
+            SELECT 
+                code,
+                type,
+                price,
+                "lastUpdate",
+                ROW_NUMBER() OVER (PARTITION BY code, type ORDER BY "lastUpdate" DESC) AS rn
+            FROM 
+                price
+        ) AS prev ON current.code = prev.code AND current.type = prev.type AND prev.rn = 2
+        WHERE 
+            current.rn = 1;
+
+
+
+            """
+    cursor.execute(query)
+    cols = [desc[0] for desc in cursor.description]
+    count = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+    # return pd.DataFrame(count, columns=cols)
+    result = [
+        Price(
+            code=code[0],
+            type=code[1],
+            price=code[2],
+            lastUpdate=code[3],
+            change_percentage=code[4],
+        )
+        for code in count
+    ]
+    return result
+
 
 
 class ExcessUpdate(BaseModel):
@@ -108,3 +224,27 @@ async def update_excess(update_data: ExcessUpdate):
     cursor.close()
     conn.close()
     return {"message": "Excess updated successfully"}
+
+
+@app.get("/excess")
+async def get_excess():
+    load_dotenv()
+    host = os.getenv("POSTGRES_HOST")
+    database = os.getenv("DATABASE")
+    user = os.getenv("POSTGRES_USER")
+    password = os.getenv("POSTGRES_PASSWORD")
+    conn = psycopg2.connect(host=host, database=database, user=user, password=password)
+    cursor = conn.cursor()
+
+    query = f"""
+            select * from public.excess
+            """
+    cursor.execute(query)
+    cols = [desc[0] for desc in cursor.description]
+    count = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+    # return pd.DataFrame(count, columns=cols)
+    result = [ExcessUpdate(code=code[0], type=code[1], value=code[2]) for code in count]
+    return result
