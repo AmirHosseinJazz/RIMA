@@ -59,3 +59,68 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE" <<-EOSQ
 	code, type, value)
 	VALUES ('EURIRR', 'sell', '150');
 EOSQL
+
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE" <<-EOSQL
+   INSERT INTO public.excess(
+	code, type, value)
+	VALUES ('TRYIRR', 'buy', '200');
+EOSQL
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE" <<-EOSQL
+   INSERT INTO public.excess(
+	code, type, value)
+	VALUES ('TRYIRR', 'sell', '150');
+EOSQL
+
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE" <<-EOSQL
+   INSERT INTO public.excess(
+	code, type, value)
+	VALUES ('GBPIRR', 'buy', '200');
+EOSQL
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE" <<-EOSQL
+   INSERT INTO public.excess(
+	code, type, value)
+	VALUES ('GBPIRR', 'sell', '150');
+EOSQL
+
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE" <<-EOSQL
+   INSERT INTO public.excess(
+	code, type, value)
+	VALUES ('AUD', 'buy', '200');
+EOSQL
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE" <<-EOSQL
+   INSERT INTO public.excess(
+	code, type, value)
+	VALUES ('AUD', 'sell', '150');
+EOSQL
+
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE" <<-EOSQL
+   INSERT INTO public.excess(
+	code, type, value)
+	VALUES ('CADIRR', 'buy', '200');
+EOSQL
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE" <<-EOSQL
+   INSERT INTO public.excess(
+	code, type, value)
+	VALUES ('CADIRR', 'sell', '150');
+EOSQL
+
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE" <<-EOSQL
+   INSERT INTO public.excess(
+	code, type, value)
+	VALUES ('CHFIRR', 'buy', '200');
+EOSQL
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE" <<-EOSQL
+   INSERT INTO public.excess(
+	code, type, value)
+	VALUES ('CHFIRR', 'sell', '150');
+EOSQL
