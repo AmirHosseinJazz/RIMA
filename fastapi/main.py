@@ -411,5 +411,18 @@ async def get_excess():
     cursor.close()
     conn.close()
     # return pd.DataFrame(count, columns=cols)
-    result = [ExcessUpdate(code=code[0], type=code[1], value=code[2]) for code in count]
+    # result = [ExcessUpdate(code=code[0], type=code[1], value=code[2]) for code in count]
+    # return result
+
+    result = {}
+
+    for code, type_, value in count:
+        if code not in result:
+            result[code] = {
+                "code": code,
+                type_: value
+            }
+        else:
+            result[code][type_] = value
+
     return result
