@@ -6,6 +6,7 @@ import pandas as pd
 import time
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+from typing import List
 
 app = FastAPI()
 # ... other imports and code ...
@@ -361,7 +362,7 @@ class ExcessUpdate(BaseModel):
 
 
 @app.post("/update_excess")
-async def update_excess(update_data: ExcessUpdate):
+async def update_excess(update_data: List[ExcessUpdate]):
     load_dotenv()
     host = os.getenv("POSTGRES_HOST")
     database = os.getenv("DATABASE")
@@ -379,7 +380,9 @@ async def update_excess(update_data: ExcessUpdate):
         ON CONFLICT (code, type) DO UPDATE 
         SET value = EXCLUDED.value;
         """
-        cursor.execute(query, (update_data.code, update_data.type, update_data.value))
+        # cursor.execute(query, (update_data.code, update_data.type, update_data.value))
+        for update in update_data:
+            cursor.execute(query, (update.code, update.type, update.value))
         conn.commit()
     except Exception as e:
         cursor.close()
