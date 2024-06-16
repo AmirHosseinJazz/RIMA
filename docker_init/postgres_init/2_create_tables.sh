@@ -113,14 +113,3 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE" <<-EOSQ
 EOSQL
 
 
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE" <<-EOSQL
-   INSERT INTO public.excess(
-	code, type, value)
-	VALUES ('CHFIRR', 'buy', '200');
-EOSQL
-
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE" <<-EOSQL
-   INSERT INTO public.excess(
-	code, type, value)
-	VALUES ('CHFIRR', 'sell', '150');
-EOSQL
