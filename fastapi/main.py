@@ -125,15 +125,27 @@ excess_sums AS (
 SELECT
     c.code,
     c.type,
-    CASE 
+        CASE 
         WHEN c.code = 'TRYIRR' THEN 
-            CASE 
-                WHEN MOD(c.current_price + COALESCE(es.total_buy, 0) + COALESCE(es.total_sell, 0), 10) < 3 THEN FLOOR((c.current_price + COALESCE(es.total_buy, 0) + COALESCE(es.total_sell, 0)) / 10) * 10
-                WHEN MOD(c.current_price + COALESCE(es.total_buy, 0) + COALESCE(es.total_sell, 0), 10) BETWEEN 3 AND 7 THEN ROUND((c.current_price + COALESCE(es.total_buy, 0) + COALESCE(es.total_sell, 0)) / 5) * 5
-                ELSE CEIL((c.current_price + COALESCE(es.total_buy, 0) + COALESCE(es.total_sell, 0)) / 10) * 10
+            CASE c.type
+                WHEN 'buy' THEN
+                    CASE
+                        WHEN MOD(c.current_price + COALESCE(es.total_buy, 0), 10) < 3 THEN FLOOR((c.current_price + COALESCE(es.total_buy, 0)) / 10) * 10
+                        WHEN MOD(c.current_price + COALESCE(es.total_buy, 0), 10) BETWEEN 3 AND 7 THEN ROUND((c.current_price + COALESCE(es.total_buy, 0)) / 5) * 5
+                        ELSE CEIL((c.current_price + COALESCE(es.total_buy, 0)) / 10) * 10
+                    END
+                WHEN 'sell' THEN
+                    CASE
+                        WHEN MOD(c.current_price + COALESCE(es.total_sell, 0), 10) < 3 THEN FLOOR((c.current_price + COALESCE(es.total_sell, 0)) / 10) * 10
+                        WHEN MOD(c.current_price + COALESCE(es.total_sell, 0), 10) BETWEEN 3 AND 7 THEN ROUND((c.current_price + COALESCE(es.total_sell, 0)) / 5) * 5
+                        ELSE CEIL((c.current_price + COALESCE(es.total_sell, 0)) / 10) * 10
+                    END
             END
         ELSE 
-            ROUND((c.current_price + COALESCE(es.total_buy, 0) + COALESCE(es.total_sell, 0)) / 10) * 10
+            CASE c.type
+                WHEN 'buy' THEN ROUND((c.current_price + COALESCE(es.total_buy, 0)) / 10) * 10
+                WHEN 'sell' THEN ROUND((c.current_price + COALESCE(es.total_sell, 0)) / 10) * 10
+            END
     END AS final_price,
     c."lastUpdate",
     CASE
