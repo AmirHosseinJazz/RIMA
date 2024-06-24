@@ -418,6 +418,131 @@ async def update_excess(update_data: List[ExcessUpdate]):
     return {"message": "Excess updated successfully"}
 
 
+class Promotion(BaseModel):
+    textvalue: str
+
+
+@app.get("/get_promo_text")
+async def get_promo_text():
+    load_dotenv()
+    host = os.getenv("POSTGRES_HOST")
+    database = os.getenv("DATABASE")
+    user = os.getenv("POSTGRES_USER")
+    password = os.getenv("POSTGRES_PASSWORD")
+    conn = psycopg2.connect(host=host, database=database, user=user, password=password)
+    cursor = conn.cursor()
+
+    query = f"""
+            select "textvalue" from public.promotion ORDER BY "lastUpdate" DESC LIMIT 1
+            """
+    cursor.execute(query)
+    cols = [desc[0] for desc in cursor.description]
+    count = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+    # return pd.DataFrame(count, columns=cols)
+    result = Promotion(textvalue=count[0][0])
+    return result
+
+
+@app.post("/update_promo_text")
+async def update_promo_text(update_data: Promotion):
+    load_dotenv()
+    host = os.getenv("POSTGRES_HOST")
+    database = os.getenv("DATABASE")
+    user = os.getenv("POSTGRES_USER")
+    password = os.getenv("POSTGRES_PASSWORD")
+
+    conn = psycopg2.connect(host=host, database=database, user=user, password=password)
+    cursor = conn.cursor()
+
+    try:
+        # Update query
+        query = """
+        INSERT INTO promotion ("textvalue", "lastUpdate", "enabled") 
+        VALUES (%s, NOW(), 'True')
+        """
+        cursor.execute(query, (update_data.textvalue,))
+        conn.commit()
+    except Exception as e:
+        cursor.close()
+        conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+    cursor.close()
+    conn.close()
+    return {"message": "Promotion updated successfully"}
+
+
+@app.post("/promo_toggle")
+async def toggle_promo():
+    load_dotenv()
+    host = os.getenv("POSTGRES_HOST")
+    database = os.getenv("DATABASE")
+    user = os.getenv("POSTGRES_USER")
+    password = os.getenv("POSTGRES_PASSWORD")
+
+    conn = None
+    try:
+        conn = psycopg2.connect(
+            host=host, database=database, user=user, password=password
+        )
+        cursor = conn.cursor()
+
+        query = """
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM public.promotion WHERE "enabled" = True) THEN
+                UPDATE public.promotion SET "enabled" = False;
+            ELSE
+                UPDATE public.promotion SET "enabled" = True;
+            END IF;
+        END $$;
+        """
+
+        cursor.execute(query)
+        conn.commit()
+
+        cursor.close()
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return {"status": "success"}
+
+
+class PromoStatus(BaseModel):
+    enabled: bool
+
+
+@app.get("/promo_status")
+async def get_promo_status():
+    load_dotenv()
+    host = os.getenv("POSTGRES_HOST")
+    database = os.getenv("DATABASE")
+    user = os.getenv("POSTGRES_USER")
+    password = os.getenv("POSTGRES_PASSWORD")
+    conn = psycopg2.connect(host=host, database=database, user=user, password=password)
+    cursor = conn.cursor()
+
+    query = f"""
+            select "enabled" from public.promotion ORDER BY "lastUpdate" DESC LIMIT 1
+            """
+    cursor.execute(query)
+    cols = [desc[0] for desc in cursor.description]
+
+    count = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+    # return pd.DataFrame(count, columns=cols)
+    result = PromoStatus(enabled=count[0][0])
+    return result
+
+
 @app.get("/excess")
 async def get_excess():
     load_dotenv()

@@ -37,6 +37,22 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE" <<-EOSQ
 EOSQL
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE" <<-EOSQL
+    CREATE TABLE IF NOT EXISTS public.promotion
+    (
+        textValue character varying COLLATE pg_catalog."default" NOT NULL,
+        "lastUpdate" character varying COLLATE pg_catalog."default" NOT NULL,
+        "enabled" boolean,
+        CONSTRAINT promo_pkey PRIMARY KEY ("lastUpdate")
+    )
+
+    TABLESPACE pg_default;
+
+    ALTER TABLE IF EXISTS public.promotion
+    OWNER TO $POSTGRES_USER; 
+EOSQL
+
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE" <<-EOSQL
     INSERT INTO public.excess(
         code, type, value)
         VALUES ('USDIRR', 'sell', '200');
