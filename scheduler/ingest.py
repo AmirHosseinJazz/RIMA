@@ -6,28 +6,56 @@ import os
 import psycopg2
 from psycopg2 import sql
 from psycopg2.extras import execute_values
+import requests
+from requests_html import HTMLSession
+
+
+def get_cookie_http():
+    url = "https://rimafinance.com"
+    response = requests.get(url)
+    cookies = response.cookies
+    for cookie in cookies:
+        if cookie.name == "PHPSESSID":
+            return cookie.value
+
+
+# If the cookie is set via JavaScript:
+def get_cookie_js():
+    session = HTMLSession()
+    url = "https://rimafinance.com"
+    response = session.get(url)
+    response.html.render()  # This will execute the JavaScript
+    cookies = session.cookies
+    for cookie in cookies:
+        if cookie.name == "PHPSESSID":
+            return cookie.value
 
 
 def ingest_data():
+    cookie_value = get_cookie_http() or get_cookie_js()
+    cookies = {
+        "PHPSESSID": cookie_value,
+    }
     headers = {
         "Accept": "*/*",
         "Accept-Language": "en,en-US;q=0.9,de;q=0.8,sm;q=0.7,fa;q=0.6",
         "Cache-Control": "no-cache",
         "Connection": "keep-alive",
+        # 'Cookie': 'PHPSESSID=elklm86dd23r97s1mt89usc570',
         "Pragma": "no-cache",
-        "Referer": "https://www.rimafinance.com/",
+        "Referer": "https://www.rimafinance.com/?size=500",
         "Sec-Fetch-Dest": "empty",
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "same-origin",
-        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
         "X-Requested-With": "XMLHttpRequest",
-        "sec-ch-ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-        "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": '"Linux"',
     }
 
     response = requests.get(
-        "https://www.rimafinance.com/ajax/all_prices", headers=headers ,timeout=10
+        "https://www.rimafinance.com/ajax/all_prices",
+        headers=headers,
+        cookies=cookies,
+        timeout=55,
     )
     last_updated = json.loads(response.text)["meta"]["time"]
     df = pd.DataFrame(json.loads(response.text)["data"]).T
