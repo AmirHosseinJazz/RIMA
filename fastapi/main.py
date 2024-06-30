@@ -12,10 +12,15 @@ app = FastAPI()
 # ... other imports and code ...
 
 
-
 origins = [
     "http://localhost",
     "http://localhost:3000",
+    "http://193.151.148.33",
+    "http://193.151.148.33:8000",
+    "http://istapex.com",
+    "http://istapex.com:8000",
+    "https://istapex.com",
+    "https://istapex.com:8000",
 ]
 
 app.add_middleware(
@@ -25,7 +30,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 
 class Asset(BaseModel):
@@ -76,61 +80,96 @@ async def get_prices():
     cursor = conn.cursor()
 
     query = f"""
-    WITH prev AS (
-        SELECT
-            code,
-            type,
-            CAST(price AS numeric) AS prev_price,
-            "lastUpdate"
-        FROM (
-            SELECT
-                code,
-                type,
-                price,
-                "lastUpdate",
-                ROW_NUMBER() OVER (PARTITION BY code, type ORDER BY "lastUpdate" DESC) AS rn
-            FROM
-                price
-        ) AS subquery
-        WHERE subquery.rn = 2
-    ),
-    current AS (
-        SELECT
-            code,
-            type,
-            CAST(price AS numeric) AS current_price,
-            "lastUpdate"
-        FROM (
-            SELECT
-                code,
-                type,
-                price,
-                "lastUpdate",
-                ROW_NUMBER() OVER (PARTITION BY code, type ORDER BY "lastUpdate" DESC) AS rn
-            FROM
-                price
-        ) AS subquery
-        WHERE subquery.rn = 1
-    )
+        WITH prev AS (
     SELECT
-        current.code,
-        current.type,
-        current.current_price AS final_price,
-        current."lastUpdate",
-        CASE
-            WHEN prev.prev_price > current.current_price THEN 'positive'
-            WHEN prev.prev_price < current.current_price THEN 'negative'
-            ELSE 'no change'
-        END AS change_direction,
-        CASE
-            WHEN prev.prev_price <> current.current_price THEN ROUND(
-                CAST(
-                    ABS(current.current_price - prev.prev_price)/ prev.prev_price* 100 AS numeric), 2)
-            ELSE 0
-        END AS change_percentage
+        code,
+        type,
+        CAST(price AS numeric) AS prev_price,
+        "lastUpdate"
+    FROM (
+        SELECT
+            code,
+            type,
+            price,
+            "lastUpdate",
+            ROW_NUMBER() OVER (PARTITION BY code, type ORDER BY "lastUpdate" DESC) AS rn
         FROM
-            current
-        LEFT JOIN prev ON current.code = prev.code AND current.type = prev.type;
+            price
+    ) AS subquery
+    WHERE subquery.rn = 2
+),
+current AS (
+    SELECT
+        code,
+        type,
+        CAST(price AS numeric) AS current_price,
+        "lastUpdate"
+    FROM (
+        SELECT
+            code,
+            type,
+            price,
+            "lastUpdate",
+            ROW_NUMBER() OVER (PARTITION BY code, type ORDER BY "lastUpdate" DESC) AS rn
+        FROM
+            price
+    ) AS subquery
+    WHERE subquery.rn = 1
+),
+excess_sums AS (
+    SELECT
+        code,
+        SUM(CASE WHEN type = 'buy' THEN CAST(value as numeric) ELSE 0 END) AS total_buy,
+        SUM(CASE WHEN type = 'sell' THEN CAST(value as numeric) ELSE 0 END) AS total_sell
+    FROM
+        excess
+    GROUP BY
+        code
+)
+SELECT
+    c.code,
+    c.type,
+        CASE 
+        WHEN c.code = 'TRYIRR' THEN 
+            CASE c.type
+                WHEN 'buy' THEN
+                    CASE
+                        WHEN MOD(c.current_price + COALESCE(es.total_buy, 0), 10) < 3 THEN FLOOR((c.current_price + COALESCE(es.total_buy, 0)) / 10) * 10
+                        WHEN MOD(c.current_price + COALESCE(es.total_buy, 0), 10) BETWEEN 3 AND 7 THEN ROUND((c.current_price + COALESCE(es.total_buy, 0)) / 5) * 5
+                        ELSE CEIL((c.current_price + COALESCE(es.total_buy, 0)) / 10) * 10
+                    END
+                WHEN 'sell' THEN
+                    CASE
+                        WHEN MOD(c.current_price + COALESCE(es.total_sell, 0), 10) < 3 THEN FLOOR((c.current_price + COALESCE(es.total_sell, 0)) / 10) * 10
+                        WHEN MOD(c.current_price + COALESCE(es.total_sell, 0), 10) BETWEEN 3 AND 7 THEN ROUND((c.current_price + COALESCE(es.total_sell, 0)) / 5) * 5
+                        ELSE CEIL((c.current_price + COALESCE(es.total_sell, 0)) / 10) * 10
+                    END
+            END
+        ELSE 
+            CASE c.type
+                WHEN 'buy' THEN ROUND((c.current_price + COALESCE(es.total_buy, 0)) / 10) * 10
+                WHEN 'sell' THEN ROUND((c.current_price + COALESCE(es.total_sell, 0)) / 10) * 10
+            END
+    END AS final_price,
+    c."lastUpdate",
+    CASE
+        WHEN p.prev_price > (c.current_price + COALESCE(es.total_buy, 0) + COALESCE(es.total_sell, 0)) THEN 'positive'
+        WHEN p.prev_price < (c.current_price + COALESCE(es.total_buy, 0) + COALESCE(es.total_sell, 0)) THEN 'negative'
+        ELSE 'no change'
+    END AS change_direction,
+    CASE
+        WHEN p.prev_price <> (c.current_price + COALESCE(es.total_buy, 0) + COALESCE(es.total_sell, 0)) THEN ROUND(
+            CAST(
+                ABS((c.current_price + COALESCE(es.total_buy, 0) + COALESCE(es.total_sell, 0)) - p.prev_price) / p.prev_price * 100 AS numeric
+            ), 2)
+        ELSE 0
+    END AS change_percentage
+FROM
+    current AS c
+LEFT JOIN prev AS p ON c.code = p.code AND c.type = p.type
+LEFT JOIN excess_sums AS es ON c.code = es.code;
+
+
         """
 
     cursor.execute(query)
@@ -140,7 +179,6 @@ async def get_prices():
     cursor.close()
     conn.close()
 
-    
     assets = {}
     gold = {}
     parity = {}
@@ -149,19 +187,18 @@ async def get_prices():
         if code[0].endswith("IRR"):
             asset_data = assets.get(code[0])
             if not asset_data:
-                slug = code[0][:-3].lower()  # Extract the slug by slicing the 'code' value
+                slug = code[0][
+                    :-3
+                ].lower()  # Extract the slug by slicing the 'code' value
                 asset_data = assets[code[0]] = {
                     "code": code[0],
                     "lastUpdate": code[3],
                     "change_direction": code[4],
                     "change_percentage": code[5],
                     "prices": {},
-                    "slug": slug  # Add the 'slug' key
+                    "slug": slug,  # Add the 'slug' key
                 }
-            asset_data["prices"][code[1]] = {
-                "type": code[1],
-                "price": code[2]
-            }
+            asset_data["prices"][code[1]] = {"type": code[1], "price": code[2]}
         elif code[0].endswith("AYAR"):
             gold_data = gold.get(code[0])
             if not gold_data:
@@ -170,12 +207,9 @@ async def get_prices():
                     "lastUpdate": code[3],
                     "change_direction": code[4],
                     "change_percentage": code[5],
-                    "prices": {}
+                    "prices": {},
                 }
-            gold_data["prices"][code[1]] = {
-                "type": code[1],
-                "price": code[2]
-            }
+            gold_data["prices"][code[1]] = {"type": code[1], "price": code[2]}
         else:
             parity_data = parity.get(code[0])
             if not parity_data:
@@ -184,18 +218,15 @@ async def get_prices():
                     "lastUpdate": code[3],
                     "change_direction": code[4],
                     "change_percentage": code[5],
-                    "prices": {}
+                    "prices": {},
                 }
-            parity_data["prices"][code[1]] = {
-                "type": code[1],
-                "price": code[2]
-            }
+            parity_data["prices"][code[1]] = {"type": code[1], "price": code[2]}
 
     return {
-            "assets": list(assets.values()),
-            "gold": list(gold.values()),
-            "parity": list(parity.values())
-        }
+        "assets": list(assets.values()),
+        "gold": list(gold.values()),
+        "parity": list(parity.values()),
+    }
 
     # result = [
     #     Price(
@@ -209,8 +240,6 @@ async def get_prices():
     #     for code in count
     # ]
     # return result
-
-
 
 
 @app.get("/price")
@@ -354,7 +383,6 @@ async def get_parities():
     return result
 
 
-
 class ExcessUpdate(BaseModel):
     code: str
     type: str
@@ -394,6 +422,131 @@ async def update_excess(update_data: List[ExcessUpdate]):
     return {"message": "Excess updated successfully"}
 
 
+class Promotion(BaseModel):
+    textvalue: str
+
+
+@app.get("/get_promo_text")
+async def get_promo_text():
+    load_dotenv()
+    host = os.getenv("POSTGRES_HOST")
+    database = os.getenv("DATABASE")
+    user = os.getenv("POSTGRES_USER")
+    password = os.getenv("POSTGRES_PASSWORD")
+    conn = psycopg2.connect(host=host, database=database, user=user, password=password)
+    cursor = conn.cursor()
+
+    query = f"""
+            select "textvalue" from public.promotion ORDER BY "lastUpdate" DESC LIMIT 1
+            """
+    cursor.execute(query)
+    cols = [desc[0] for desc in cursor.description]
+    count = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+    # return pd.DataFrame(count, columns=cols)
+    result = Promotion(textvalue=count[0][0])
+    return result
+
+
+@app.post("/update_promo_text")
+async def update_promo_text(update_data: Promotion):
+    load_dotenv()
+    host = os.getenv("POSTGRES_HOST")
+    database = os.getenv("DATABASE")
+    user = os.getenv("POSTGRES_USER")
+    password = os.getenv("POSTGRES_PASSWORD")
+
+    conn = psycopg2.connect(host=host, database=database, user=user, password=password)
+    cursor = conn.cursor()
+
+    try:
+        # Update query
+        query = """
+        INSERT INTO promotion ("textvalue", "lastUpdate", "enabled") 
+        VALUES (%s, NOW(), 'True')
+        """
+        cursor.execute(query, (update_data.textvalue,))
+        conn.commit()
+    except Exception as e:
+        cursor.close()
+        conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+    cursor.close()
+    conn.close()
+    return {"message": "Promotion updated successfully"}
+
+
+@app.post("/promo_toggle")
+async def toggle_promo():
+    load_dotenv()
+    host = os.getenv("POSTGRES_HOST")
+    database = os.getenv("DATABASE")
+    user = os.getenv("POSTGRES_USER")
+    password = os.getenv("POSTGRES_PASSWORD")
+
+    conn = None
+    try:
+        conn = psycopg2.connect(
+            host=host, database=database, user=user, password=password
+        )
+        cursor = conn.cursor()
+
+        query = """
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM public.promotion WHERE "enabled" = True) THEN
+                UPDATE public.promotion SET "enabled" = False;
+            ELSE
+                UPDATE public.promotion SET "enabled" = True;
+            END IF;
+        END $$;
+        """
+
+        cursor.execute(query)
+        conn.commit()
+
+        cursor.close()
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return {"status": "success"}
+
+
+class PromoStatus(BaseModel):
+    enabled: bool
+
+
+@app.get("/promo_status")
+async def get_promo_status():
+    load_dotenv()
+    host = os.getenv("POSTGRES_HOST")
+    database = os.getenv("DATABASE")
+    user = os.getenv("POSTGRES_USER")
+    password = os.getenv("POSTGRES_PASSWORD")
+    conn = psycopg2.connect(host=host, database=database, user=user, password=password)
+    cursor = conn.cursor()
+
+    query = f"""
+            select "enabled" from public.promotion ORDER BY "lastUpdate" DESC LIMIT 1
+            """
+    cursor.execute(query)
+    cols = [desc[0] for desc in cursor.description]
+
+    count = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+    # return pd.DataFrame(count, columns=cols)
+    result = PromoStatus(enabled=count[0][0])
+    return result
+
+
 @app.get("/excess")
 async def get_excess():
     load_dotenv()
@@ -421,10 +574,7 @@ async def get_excess():
 
     for code, type_, value in count:
         if code not in result:
-            result[code] = {
-                "code": code,
-                type_: value
-            }
+            result[code] = {"code": code, type_: value}
         else:
             result[code][type_] = value
 
