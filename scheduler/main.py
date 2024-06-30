@@ -1,9 +1,12 @@
 from prefect import flow, serve, get_client
 from ingest import ingest_data
+import time
+import random
 
 
 @flow(log_prints=True)
 def data_start():
+    time.sleep(random.randint(1, 10))
     ingest_data()
 
 

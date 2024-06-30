@@ -27,7 +27,7 @@ def ingest_data():
     }
 
     response = requests.get(
-        "https://www.rimafinance.com/ajax/all_prices", headers=headers
+        "https://www.rimafinance.com/ajax/all_prices", headers=headers ,timeout=10
     )
     last_updated = json.loads(response.text)["meta"]["time"]
     df = pd.DataFrame(json.loads(response.text)["data"]).T
