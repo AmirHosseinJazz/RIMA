@@ -129,3 +129,15 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE" <<-EOSQ
 EOSQL
 
 
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE" <<-EOSQL
+   INSERT INTO public.excess(
+	code, type, value)
+	VALUES ('USDIRRt', 'buy', '200');
+EOSQL
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE" <<-EOSQL
+   INSERT INTO public.excess(
+	code, type, value)
+	VALUES ('USDIRRt', 'sell', '150');
+EOSQL

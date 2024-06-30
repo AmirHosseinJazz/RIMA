@@ -8,5 +8,5 @@ def data_start():
 
 
 if __name__ == "__main__":
-    scheduler = data_start.to_deployment(name="pipeline", cron="*/1 * * * *")
+    scheduler = data_start.to_deployment(name="pipeline", cron="*/2 * * * *")
     serve(scheduler)

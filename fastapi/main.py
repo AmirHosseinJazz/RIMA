@@ -17,6 +17,10 @@ origins = [
     "http://localhost:3000",
     "http://193.151.148.33",
     "http://193.151.148.33:8000",
+    "http://istapex.com",
+    "http://istapex.com:8000",
+    "https://istapex.com",
+    "https://istapex.com:8000",
 ]
 
 app.add_middleware(
