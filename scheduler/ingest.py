@@ -12,7 +12,7 @@ from requests_html import HTMLSession
 
 def get_cookie_http():
     url = "https://rimafinance.com"
-    response = requests.get(url)
+    response = requests.get(url, timeout=55, verify=False)
     cookies = response.cookies
     for cookie in cookies:
         if cookie.name == "PHPSESSID":
@@ -23,7 +23,7 @@ def get_cookie_http():
 def get_cookie_js():
     session = HTMLSession()
     url = "https://rimafinance.com"
-    response = session.get(url)
+    response = session.get(url, timeout=55, verify=False)
     response.html.render()  # This will execute the JavaScript
     cookies = session.cookies
     for cookie in cookies:
@@ -56,6 +56,7 @@ def ingest_data():
         headers=headers,
         cookies=cookies,
         timeout=55,
+        verify=False,
     )
     last_updated = json.loads(response.text)["meta"]["time"]
     df = pd.DataFrame(json.loads(response.text)["data"]).T
