@@ -106,13 +106,26 @@ EOSQL
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE" <<-EOSQL
    INSERT INTO public.excess(
 	code, type, value)
-	VALUES ('AUD', 'buy', '200');
+	VALUES ('CHFIRR', 'buy', '200');
 EOSQL
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE" <<-EOSQL
    INSERT INTO public.excess(
 	code, type, value)
-	VALUES ('AUD', 'sell', '150');
+	VALUES ('CHFIRR', 'sell', '150');
+EOSQL
+
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE" <<-EOSQL
+   INSERT INTO public.excess(
+	code, type, value)
+	VALUES ('AUDIRR', 'buy', '200');
+EOSQL
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE" <<-EOSQL
+   INSERT INTO public.excess(
+	code, type, value)
+	VALUES ('AUDIRR', 'sell', '150');
 EOSQL
 
 

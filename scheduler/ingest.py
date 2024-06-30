@@ -32,10 +32,10 @@ def get_cookie_js():
 
 
 def ingest_data():
-    cookie_value = get_cookie_http() or get_cookie_js()
-    cookies = {
-        "PHPSESSID": cookie_value,
-    }
+    # cookie_value = get_cookie_http() or get_cookie_js()
+    # cookies = {
+    #     "PHPSESSID": cookie_value,
+    # }
     headers = {
         "Accept": "*/*",
         "Accept-Language": "en,en-US;q=0.9,de;q=0.8,sm;q=0.7,fa;q=0.6",
@@ -54,9 +54,9 @@ def ingest_data():
     response = requests.get(
         "https://www.rimafinance.com/ajax/all_prices",
         headers=headers,
-        cookies=cookies,
-        timeout=55,
-        verify=False,
+        # cookies=cookies,
+        timeout=120,
+        # verify=False,
     )
     last_updated = json.loads(response.text)["meta"]["time"]
     df = pd.DataFrame(json.loads(response.text)["data"]).T

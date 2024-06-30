@@ -80,47 +80,39 @@ async def get_prices():
     cursor = conn.cursor()
 
     query = f"""
-        WITH prev AS (
+       WITH sell_prices AS (
     SELECT
         code,
-        type,
-        CAST(price AS numeric) AS prev_price,
+        CAST(price AS numeric) AS sell_price,
+        "lastUpdate",
+        ROW_NUMBER() OVER (PARTITION BY code ORDER BY "lastUpdate" DESC) AS rn
+    FROM
+        price
+    WHERE type = 'sell'
+),
+prev AS (
+    SELECT
+        code,
+        sell_price AS prev_price,
         "lastUpdate"
-    FROM (
-        SELECT
-            code,
-            type,
-            price,
-            "lastUpdate",
-            ROW_NUMBER() OVER (PARTITION BY code, type ORDER BY "lastUpdate" DESC) AS rn
-        FROM
-            price
-    ) AS subquery
-    WHERE subquery.rn = 2
+    FROM
+        sell_prices
+    WHERE rn = 2
 ),
 current AS (
     SELECT
         code,
-        type,
-        CAST(price AS numeric) AS current_price,
+        sell_price AS current_price,
         "lastUpdate"
-    FROM (
-        SELECT
-            code,
-            type,
-            price,
-            "lastUpdate",
-            ROW_NUMBER() OVER (PARTITION BY code, type ORDER BY "lastUpdate" DESC) AS rn
-        FROM
-            price
-    ) AS subquery
-    WHERE subquery.rn = 1
+    FROM
+        sell_prices
+    WHERE rn = 1
 ),
 excess_sums AS (
     SELECT
         code,
-        SUM(CASE WHEN type = 'buy' THEN CAST(value as numeric) ELSE 0 END) AS total_buy,
-        SUM(CASE WHEN type = 'sell' THEN CAST(value as numeric) ELSE 0 END) AS total_sell
+        SUM(CASE WHEN type = 'buy' THEN CAST(value AS numeric) ELSE 0 END) AS total_buy,
+        SUM(CASE WHEN type = 'sell' THEN CAST(value AS numeric) ELSE 0 END) AS total_sell
     FROM
         excess
     GROUP BY
@@ -128,10 +120,10 @@ excess_sums AS (
 )
 SELECT
     c.code,
-    c.type,
-        CASE 
+    t.type,
+    CASE 
         WHEN c.code = 'TRYIRR' THEN 
-            CASE c.type
+            CASE t.type
                 WHEN 'buy' THEN
                     CASE
                         WHEN MOD(c.current_price + COALESCE(es.total_buy, 0), 10) < 3 THEN FLOOR((c.current_price + COALESCE(es.total_buy, 0)) / 10) * 10
@@ -146,7 +138,7 @@ SELECT
                     END
             END
         ELSE 
-            CASE c.type
+            CASE t.type
                 WHEN 'buy' THEN ROUND((c.current_price + COALESCE(es.total_buy, 0)) / 10) * 10
                 WHEN 'sell' THEN ROUND((c.current_price + COALESCE(es.total_sell, 0)) / 10) * 10
             END
@@ -166,7 +158,8 @@ SELECT
     END AS change_percentage
 FROM
     current AS c
-LEFT JOIN prev AS p ON c.code = p.code AND c.type = p.type
+CROSS JOIN (SELECT DISTINCT type FROM price) AS t
+LEFT JOIN prev AS p ON c.code = p.code
 LEFT JOIN excess_sums AS es ON c.code = es.code;
 
 
