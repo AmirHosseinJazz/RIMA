@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y netcat-traditional \
 
 # Install the dependencies
 RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install lxml[html_clean]
 
 # Copy the rest of the code into the container
 COPY . ./app
