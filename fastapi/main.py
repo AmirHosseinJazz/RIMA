@@ -21,6 +21,11 @@ origins = [
     "http://istapex.com:8000",
     "https://istapex.com",
     "https://istapex.com:8000",
+    "http://www.istapex.com",
+    "http://www.istapex.com:8000",
+    "https://www.istapex.com",
+    "https://www.istapex.com:8000",
+    
 ]
 
 app.add_middleware(
