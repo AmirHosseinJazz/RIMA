@@ -104,6 +104,7 @@ def ingest_data():
         SELECT "lastUpdate", price
         FROM public.price
         WHERE code = 'USDIRR'
+        and type = 'sell'
     ) t2
     WHERE t1.code = 'USDIRRt'
     AND t1.type = 'sell'
@@ -111,18 +112,19 @@ def ingest_data():
 
     """
     queryupdate2 = """
-    UPDATE public.price t1
-SET price = t2.price
-FROM (
-    SELECT "lastUpdate", price
-    FROM public.price
-    WHERE code = 'USDIRR'
-) t2
-WHERE t1.code = 'USDIRRt'
-AND t1.type = 'buy'
-AND t1."lastUpdate" = t2."lastUpdate";
+        UPDATE public.price t1
+    SET price = t2.price
+    FROM (
+        SELECT "lastUpdate", price
+        FROM public.price
+        WHERE code = 'USDIRR'
+        and type = 'buy'
+    ) t2
+    WHERE t1.code = 'USDIRRt'
+    AND t1.type = 'buy'
+    AND t1."lastUpdate" = t2."lastUpdate";
 
-"""
+    """
     with psycopg2.connect(**conn_params) as conn:
         with conn.cursor() as cur:
             try:
