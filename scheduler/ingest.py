@@ -98,29 +98,36 @@ def ingest_data():
                 conn.rollback()
 
     queryupdate = """
-    UPDATE t1
-    SET t1.price = t2.price
-    FROM public.price t1
-    INNER JOIN public.price t2
-    ON t1.lastUpdate = t2.lastUpdate
-    AND t2.code = 'USDIRR'
+    UPDATE public.price t1
+    SET price = t2.price
+    FROM (
+        SELECT lastupdate, price
+        FROM public.price
+        WHERE code = 'USDIRR'
+    ) t2
     WHERE t1.code = 'USDIRRt'
-    AND t1.type = 'sell';
+    AND t1.type = 'sell'
+    AND t1.lastupdate = t2.lastupdate;
 
-    -- Update buy prices
-    UPDATE t1
-    SET t1.price = t2.price
-    FROM public.price t1
-    INNER JOIN public.price t2
-    ON t1.lastUpdate = t2.lastUpdate
-    AND t2.code = 'USDIRR'
-    WHERE t1.code = 'USDIRRt'
-    AND t1.type = 'buy';
     """
+    queryupdate2 = """
+    UPDATE public.price t1
+SET price = t2.price
+FROM (
+    SELECT lastupdate, price
+    FROM public.price
+    WHERE code = 'USDIRR'
+) t2
+WHERE t1.code = 'USDIRRt'
+AND t1.type = 'buy'
+AND t1.lastupdate = t2.lastupdate;
+
+"""
     with psycopg2.connect(**conn_params) as conn:
         with conn.cursor() as cur:
             try:
                 cur.execute(queryupdate)
+                cur.execute(queryupdate2)
                 conn.commit()
                 print(f"Data updated in {db_table} successfully.")
             except Exception as e:
