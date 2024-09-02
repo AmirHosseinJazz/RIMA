@@ -25,7 +25,6 @@ origins = [
     "http://www.istapex.com:8000",
     "https://www.istapex.com",
     "https://www.istapex.com:8000",
-    
 ]
 
 app.add_middleware(
@@ -576,4 +575,38 @@ async def get_excess():
         else:
             result[code][type_] = value
 
+    return result
+
+
+class Price(BaseModel):
+    code: str
+    type: str
+    price: str
+    lastUpdate: str
+
+
+@app.get("/raw")
+async def get_raw():
+    load_dotenv()
+    host = os.getenv("POSTGRES_HOST")
+    database = os.getenv("DATABASE")
+    user = os.getenv("POSTGRES_USER")
+    password = os.getenv("POSTGRES_PASSWORD")
+    conn = psycopg2.connect(host=host, database=database, user=user, password=password)
+    cursor = conn.cursor()
+
+    query = f"""
+            select * from public.price Order by "lastUpdate" DESC limit 50
+            """
+    cursor.execute(query)
+    cols = [desc[0] for desc in cursor.description]
+    count = cursor.fetchall()
+    result = []
+    for code in count:
+        result.append(
+            Price(code=code[0], type=code[1], price=code[3], lastUpdate=code[2])
+        )
+    cursor.close()
+    conn.close()
+    print(result)
     return result
