@@ -94,23 +94,37 @@ async def get_prices():
         price
     WHERE type = 'sell'
 ),
+buy_prices AS (
+    SELECT
+        code,
+        CAST(price AS numeric) AS buy_price,
+        "lastUpdate",
+        ROW_NUMBER() OVER (PARTITION BY code ORDER BY "lastUpdate" DESC) AS rn
+    FROM
+        price
+    WHERE type = 'buy'
+),
 prev AS (
     SELECT
         code,
-        sell_price AS prev_price,
+        sell_price AS prev_sell_price,
+        buy_price AS prev_buy_price,
         "lastUpdate"
     FROM
         sell_prices
-    WHERE rn = 2
+    FULL OUTER JOIN buy_prices USING (code, "lastUpdate")
+    WHERE sell_prices.rn = 2 OR buy_prices.rn = 2
 ),
 current AS (
     SELECT
         code,
-        sell_price AS current_price,
+        sell_price AS current_sell_price,
+        buy_price AS current_buy_price,
         "lastUpdate"
     FROM
         sell_prices
-    WHERE rn = 1
+    FULL OUTER JOIN buy_prices USING (code, "lastUpdate")
+    WHERE sell_prices.rn = 1 OR buy_prices.rn = 1
 ),
 excess_sums AS (
     SELECT
@@ -130,33 +144,35 @@ SELECT
             CASE t.type
                 WHEN 'buy' THEN
                     CASE
-                        WHEN MOD(c.current_price + COALESCE(es.total_buy, 0), 10) < 3 THEN FLOOR((c.current_price + COALESCE(es.total_buy, 0)) / 10) * 10
-                        WHEN MOD(c.current_price + COALESCE(es.total_buy, 0), 10) BETWEEN 3 AND 7 THEN ROUND((c.current_price + COALESCE(es.total_buy, 0)) / 5) * 5
-                        ELSE CEIL((c.current_price + COALESCE(es.total_buy, 0)) / 10) * 10
+                        WHEN MOD(c.current_buy_price + COALESCE(es.total_buy, 0), 10) < 3 THEN FLOOR((c.current_buy_price + COALESCE(es.total_buy, 0)) / 10) * 10
+                        WHEN MOD(c.current_buy_price + COALESCE(es.total_buy, 0), 10) BETWEEN 3 AND 7 THEN ROUND((c.current_buy_price + COALESCE(es.total_buy, 0)) / 5) * 5
+                        ELSE CEIL((c.current_buy_price + COALESCE(es.total_buy, 0)) / 10) * 10
                     END
                 WHEN 'sell' THEN
                     CASE
-                        WHEN MOD(c.current_price + COALESCE(es.total_sell, 0), 10) < 3 THEN FLOOR((c.current_price + COALESCE(es.total_sell, 0)) / 10) * 10
-                        WHEN MOD(c.current_price + COALESCE(es.total_sell, 0), 10) BETWEEN 3 AND 7 THEN ROUND((c.current_price + COALESCE(es.total_sell, 0)) / 5) * 5
-                        ELSE CEIL((c.current_price + COALESCE(es.total_sell, 0)) / 10) * 10
+                        WHEN MOD(c.current_sell_price + COALESCE(es.total_sell, 0), 10) < 3 THEN FLOOR((c.current_sell_price + COALESCE(es.total_sell, 0)) / 10) * 10
+                        WHEN MOD(c.current_sell_price + COALESCE(es.total_sell, 0), 10) BETWEEN 3 AND 7 THEN ROUND((c.current_sell_price + COALESCE(es.total_sell, 0)) / 5) * 5
+                        ELSE CEIL((c.current_sell_price + COALESCE(es.total_sell, 0)) / 10) * 10
                     END
             END
         ELSE 
             CASE t.type
-                WHEN 'buy' THEN ROUND((c.current_price + COALESCE(es.total_buy, 0)) / 10) * 10
-                WHEN 'sell' THEN ROUND((c.current_price + COALESCE(es.total_sell, 0)) / 10) * 10
+                WHEN 'buy' THEN ROUND((c.current_buy_price + COALESCE(es.total_buy, 0)) / 10) * 10
+                WHEN 'sell' THEN ROUND((c.current_sell_price + COALESCE(es.total_sell, 0)) / 10) * 10
             END
     END AS final_price,
     c."lastUpdate",
     CASE
-        WHEN p.prev_price > (c.current_price + COALESCE(es.total_buy, 0) + COALESCE(es.total_sell, 0)) THEN 'positive'
-        WHEN p.prev_price < (c.current_price + COALESCE(es.total_buy, 0) + COALESCE(es.total_sell, 0)) THEN 'negative'
+        WHEN p.prev_sell_price > (c.current_sell_price + COALESCE(es.total_sell, 0)) THEN 'positive'
+        WHEN p.prev_buy_price > (c.current_buy_price + COALESCE(es.total_buy, 0)) THEN 'positive'
+        WHEN p.prev_sell_price < (c.current_sell_price + COALESCE(es.total_sell, 0)) THEN 'negative'
+        WHEN p.prev_buy_price < (c.current_buy_price + COALESCE(es.total_buy, 0)) THEN 'negative'
         ELSE 'no change'
     END AS change_direction,
     CASE
-        WHEN p.prev_price <> (c.current_price + COALESCE(es.total_buy, 0) + COALESCE(es.total_sell, 0)) THEN ROUND(
+        WHEN p.prev_sell_price <> (c.current_sell_price + COALESCE(es.total_sell, 0)) OR p.prev_buy_price <> (c.current_buy_price + COALESCE(es.total_buy, 0)) THEN ROUND(
             CAST(
-                ABS((c.current_price + COALESCE(es.total_buy, 0) + COALESCE(es.total_sell, 0)) - p.prev_price) / p.prev_price * 100 AS numeric
+                ABS((c.current_sell_price + COALESCE(es.total_sell, 0)) - p.prev_sell_price) / p.prev_sell_price * 100 AS numeric
             ), 2)
         ELSE 0
     END AS change_percentage
@@ -165,6 +181,7 @@ FROM
 CROSS JOIN (SELECT DISTINCT type FROM price) AS t
 LEFT JOIN prev AS p ON c.code = p.code
 LEFT JOIN excess_sums AS es ON c.code = es.code;
+
 
 
         """
@@ -596,7 +613,7 @@ async def get_raw():
     cursor = conn.cursor()
 
     query = f"""
-            select * from public.price Order by "lastUpdate" DESC limit 50
+            select * from public.price Order by "lastUpdate" DESC limit 100
             """
     cursor.execute(query)
     cols = [desc[0] for desc in cursor.description]
