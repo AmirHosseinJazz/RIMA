@@ -125,18 +125,19 @@ def ingest_data():
     AND t1."lastUpdate" = t2."lastUpdate";
 
     """
+    # set all the buy prices for each code based on the sale price of the same code
     queryupdate3 = """
     UPDATE public.price t1
     SET price = t2.price
     FROM (
         SELECT "lastUpdate", price, code
         FROM public.price
-        and type = 'sell'
-        ORDER BY "lastUpdate" DESC
+        WHERE type = 'sell'
     ) t2
-    WHERE t1.code = t2.code
-    AND t1.type = 'buy'
-    AND t1."lastUpdate" = t2."lastUpdate";
+    WHERE t1.type = 'buy'
+    AND t1."lastUpdate" = t2."lastUpdate"
+    AND t1.code = t2.code;
+
 
     """
 
