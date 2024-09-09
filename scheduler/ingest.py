@@ -125,11 +125,27 @@ def ingest_data():
     AND t1."lastUpdate" = t2."lastUpdate";
 
     """
+    queryupdate3 = """
+    UPDATE public.price t1
+    SET price = t2.price
+    FROM (
+        SELECT "lastUpdate", price, code
+        FROM public.price
+        and type = 'sell'
+        ORDER BY "lastUpdate" DESC
+    ) t2
+    WHERE t1.code = t2.code
+    AND t1.type = 'buy'
+    AND t1."lastUpdate" = t2."lastUpdate";
+
+    """
+
     with psycopg2.connect(**conn_params) as conn:
         with conn.cursor() as cur:
             try:
                 cur.execute(queryupdate)
                 cur.execute(queryupdate2)
+                cur.execute(queryupdate3)
                 conn.commit()
                 print(f"Data updated in {db_table} successfully.")
             except Exception as e:
