@@ -1,3 +1,12 @@
+"""
+Ingests data from the RimaFinance website and stores it in a PostgreSQL database.
+
+This function retrieves the latest price data for various financial instruments from the RimaFinance website, processes the data into a pandas DataFrame, and then inserts the data into a PostgreSQL database table. It also updates the buy and sell prices for the 'USDIRR' instrument based on the latest data.
+
+The function uses the `requests` and `requests-html` libraries to fetch the data from the website, and the `psycopg2` library to interact with the PostgreSQL database. It also loads environment variables for the database connection details using the `dotenv` library.
+
+The function is designed to be run periodically (e.g. as a cron job) to keep the database up-to-date with the latest price data.
+"""
 import requests
 import json
 import pandas as pd
@@ -137,16 +146,42 @@ def ingest_data():
     WHERE t1.type = 'buy'
     AND t1."lastUpdate" = t2."lastUpdate"
     AND t1.code = t2.code;
-
-
+    """
+    rowCountQuery = """
+    SELECT COUNT(*) FROM public.price;
     """
 
+    deleteExtraRows = """
+    WITH ranked_prices AS (
+    SELECT
+        ctid,  -- Using ctid to uniquely identify rows
+        code,
+        type,
+        "lastUpdate",
+        ROW_NUMBER() OVER (PARTITION BY code, type ORDER BY "lastUpdate" DESC) AS rn
+    FROM
+        public.price
+    )
+    DELETE FROM public.price
+    WHERE ctid IN (
+        SELECT ctid FROM ranked_prices WHERE rn > 2
+    );
+
+    """
     with psycopg2.connect(**conn_params) as conn:
         with conn.cursor() as cur:
             try:
                 cur.execute(queryupdate)
                 cur.execute(queryupdate2)
                 cur.execute(queryupdate3)
+
+                # Execute the row count query
+                cur.execute(rowCountQuery)
+                # Fetch the result
+                rowCount = cur.fetchone()[0]  # Get the first column of the first row
+                
+                if rowCount > 500:
+                    cur.execute(deleteExtraRows)
                 conn.commit()
                 print(f"Data updated in {db_table} successfully.")
             except Exception as e:
