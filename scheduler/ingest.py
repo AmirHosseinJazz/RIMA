@@ -11,7 +11,7 @@ from requests_html import HTMLSession
 
 
 def get_cookie_http():
-    url = "https://rimafinance.com"
+    url = "https://ladinexchange.com"
     response = requests.get(url, timeout=55, verify=False)
     cookies = response.cookies
     for cookie in cookies:
@@ -22,7 +22,7 @@ def get_cookie_http():
 # If the cookie is set via JavaScript:
 def get_cookie_js():
     session = HTMLSession()
-    url = "https://rimafinance.com"
+    url = "https://ladinexchange.com"
     response = session.get(url, timeout=55, verify=False)
     response.html.render()  # This will execute the JavaScript
     cookies = session.cookies
@@ -43,7 +43,7 @@ def ingest_data():
         "Connection": "keep-alive",
         # 'Cookie': 'PHPSESSID=elklm86dd23r97s1mt89usc570',
         "Pragma": "no-cache",
-        "Referer": "https://www.rimafinance.com/?size=500",
+        "Referer": "https://www.ladinexchange.com/?size=500",
         "Sec-Fetch-Dest": "empty",
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "same-origin",
@@ -52,11 +52,11 @@ def ingest_data():
     }
 
     response = requests.get(
-        "https://www.rimafinance.com/ajax/all_prices",
+        "https://www.ladinexchange.com/ajax/all_prices",
         headers=headers,
         # cookies=cookies,
         timeout=120,
-        # verify=False,
+        verify=False,
     )
     last_updated = json.loads(response.text)["meta"]["time"]
     df = pd.DataFrame(json.loads(response.text)["data"]).T

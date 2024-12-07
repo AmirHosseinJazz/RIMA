@@ -6,3 +6,4 @@ note
 docker_volume/
 perfect_server/.env
 /log
+scheduler/test.ipynb
