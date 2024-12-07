@@ -10,6 +10,59 @@ import requests
 from requests_html import HTMLSession
 
 
+def clean_data():
+    """
+    Cleans the public.price table by sorting on lastUpdate
+    and removing the last 90% of entries.
+    """
+    # Load environment variables
+    load_dotenv()
+    db_name = os.getenv("DATABASE")
+    db_user = os.getenv("POSTGRES_USER")
+    db_pass = os.getenv("POSTGRES_PASSWORD")
+    db_host = os.getenv("POSTGRES_HOST")
+    db_table = "public.price"
+
+    conn_params = {
+        "dbname": db_name,
+        "user": db_user,
+        "password": db_pass,
+        "host": db_host,
+    }
+
+    # SQL to clean up the last 90% of entries based on lastUpdate
+    clean_query = f"""
+    WITH ranked_prices AS (
+        SELECT "code", "type", "lastUpdate", "price",
+               ROW_NUMBER() OVER (ORDER BY "lastUpdate" DESC) AS row_num,
+               COUNT(*) OVER () AS total_rows
+        FROM {db_table}
+    ),
+    to_delete AS (
+        SELECT "code", "type", "lastUpdate"
+        FROM ranked_prices
+        WHERE row_num > total_rows * 0.1  -- Retain only the top 10%
+    )
+    DELETE FROM {db_table} t
+    USING to_delete d
+    WHERE t."code" = d."code"
+      AND t."type" = d."type"
+      AND t."lastUpdate" = d."lastUpdate";
+    """
+
+    with psycopg2.connect(**conn_params) as conn:
+        with conn.cursor() as cur:
+            try:
+                cur.execute(clean_query)
+                conn.commit()
+                print(
+                    f"Cleaned {db_table}: Removed 90% of older entries based on lastUpdate."
+                )
+            except Exception as e:
+                print("Error while cleaning data: ", e)
+                conn.rollback()
+
+
 def get_cookie_http():
     url = "https://ladinexchange.com"
     response = requests.get(url, timeout=55, verify=False)
