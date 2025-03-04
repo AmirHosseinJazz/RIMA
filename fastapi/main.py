@@ -84,7 +84,7 @@ async def get_prices():
     cursor = conn.cursor()
 
     query = f"""
-       WITH sell_prices AS (
+      WITH sell_prices AS (
     SELECT
         code,
         CAST(price AS numeric) AS sell_price,
@@ -170,10 +170,12 @@ SELECT
         ELSE 'no change'
     END AS change_direction,
     CASE
-        WHEN p.prev_sell_price <> (c.current_sell_price + COALESCE(es.total_sell, 0)) OR p.prev_buy_price <> (c.current_buy_price + COALESCE(es.total_buy, 0)) THEN ROUND(
-            CAST(
-                ABS((c.current_sell_price + COALESCE(es.total_sell, 0)) - p.prev_sell_price) / p.prev_sell_price * 100 AS numeric
-            ), 2)
+        WHEN p.prev_sell_price IS NOT NULL AND p.prev_sell_price <> 0 AND t.type = 'sell' AND 
+             (c.current_sell_price + COALESCE(es.total_sell, 0)) <> p.prev_sell_price 
+             THEN ROUND(CAST(ABS((c.current_sell_price + COALESCE(es.total_sell, 0)) - p.prev_sell_price) / NULLIF(p.prev_sell_price, 0) * 100 AS numeric), 2)
+        WHEN p.prev_buy_price IS NOT NULL AND p.prev_buy_price <> 0 AND t.type = 'buy' AND 
+             (c.current_buy_price + COALESCE(es.total_buy, 0)) <> p.prev_buy_price 
+             THEN ROUND(CAST(ABS((c.current_buy_price + COALESCE(es.total_buy, 0)) - p.prev_buy_price) / NULLIF(p.prev_buy_price, 0) * 100 AS numeric), 2)
         ELSE 0
     END AS change_percentage
 FROM

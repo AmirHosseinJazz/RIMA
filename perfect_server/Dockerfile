@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y netcat-traditional
 
 RUN pip install --no-cache-dir psycopg2-binary
 
-RUN pip install -U prefect
+RUN pip install -U prefect==3.2.9
 
 # Install requirements
 COPY ./requirements.txt /app/
