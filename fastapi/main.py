@@ -72,9 +72,8 @@ class Price(BaseModel):
     change_direction: str
     change_percentage: float
 
-
 @app.get("/pricev2")
-async def get_prices():
+async def get_prices_without_ladin():
     load_dotenv()
     host = os.getenv("POSTGRES_HOST")
     database = os.getenv("DATABASE")
@@ -84,107 +83,7 @@ async def get_prices():
     cursor = conn.cursor()
 
     query = f"""
-      WITH sell_prices AS (
-    SELECT
-        code,
-        CAST(price AS numeric) AS sell_price,
-        "lastUpdate",
-        ROW_NUMBER() OVER (PARTITION BY code ORDER BY "lastUpdate" DESC) AS rn
-    FROM
-        price
-    WHERE type = 'sell'
-),
-buy_prices AS (
-    SELECT
-        code,
-        CAST(price AS numeric) AS buy_price,
-        "lastUpdate",
-        ROW_NUMBER() OVER (PARTITION BY code ORDER BY "lastUpdate" DESC) AS rn
-    FROM
-        price
-    WHERE type = 'buy'
-),
-prev AS (
-    SELECT
-        code,
-        sell_price AS prev_sell_price,
-        buy_price AS prev_buy_price,
-        "lastUpdate"
-    FROM
-        sell_prices
-    FULL OUTER JOIN buy_prices USING (code, "lastUpdate")
-    WHERE sell_prices.rn = 2 OR buy_prices.rn = 2
-),
-current AS (
-    SELECT
-        code,
-        sell_price AS current_sell_price,
-        buy_price AS current_buy_price,
-        "lastUpdate"
-    FROM
-        sell_prices
-    FULL OUTER JOIN buy_prices USING (code, "lastUpdate")
-    WHERE sell_prices.rn = 1 OR buy_prices.rn = 1
-),
-excess_sums AS (
-    SELECT
-        code,
-        SUM(CASE WHEN type = 'buy' THEN CAST(value AS numeric) ELSE 0 END) AS total_buy,
-        SUM(CASE WHEN type = 'sell' THEN CAST(value AS numeric) ELSE 0 END) AS total_sell
-    FROM
-        excess
-    GROUP BY
-        code
-)
-SELECT
-    c.code,
-    t.type,
-    CASE 
-        WHEN c.code = 'TRYIRR' THEN 
-            CASE t.type
-                WHEN 'buy' THEN
-                    CASE
-                        WHEN MOD(c.current_buy_price + COALESCE(es.total_buy, 0), 10) < 3 THEN FLOOR((c.current_buy_price + COALESCE(es.total_buy, 0)) / 10) * 10
-                        WHEN MOD(c.current_buy_price + COALESCE(es.total_buy, 0), 10) BETWEEN 3 AND 7 THEN ROUND((c.current_buy_price + COALESCE(es.total_buy, 0)) / 5) * 5
-                        ELSE CEIL((c.current_buy_price + COALESCE(es.total_buy, 0)) / 10) * 10
-                    END
-                WHEN 'sell' THEN
-                    CASE
-                        WHEN MOD(c.current_sell_price + COALESCE(es.total_sell, 0), 10) < 3 THEN FLOOR((c.current_sell_price + COALESCE(es.total_sell, 0)) / 10) * 10
-                        WHEN MOD(c.current_sell_price + COALESCE(es.total_sell, 0), 10) BETWEEN 3 AND 7 THEN ROUND((c.current_sell_price + COALESCE(es.total_sell, 0)) / 5) * 5
-                        ELSE CEIL((c.current_sell_price + COALESCE(es.total_sell, 0)) / 10) * 10
-                    END
-            END
-        ELSE 
-            CASE t.type
-                WHEN 'buy' THEN ROUND((c.current_buy_price + COALESCE(es.total_buy, 0)) / 10) * 10
-                WHEN 'sell' THEN ROUND((c.current_sell_price + COALESCE(es.total_sell, 0)) / 10) * 10
-            END
-    END AS final_price,
-    c."lastUpdate",
-    CASE
-        WHEN p.prev_sell_price > (c.current_sell_price + COALESCE(es.total_sell, 0)) THEN 'positive'
-        WHEN p.prev_buy_price > (c.current_buy_price + COALESCE(es.total_buy, 0)) THEN 'positive'
-        WHEN p.prev_sell_price < (c.current_sell_price + COALESCE(es.total_sell, 0)) THEN 'negative'
-        WHEN p.prev_buy_price < (c.current_buy_price + COALESCE(es.total_buy, 0)) THEN 'negative'
-        ELSE 'no change'
-    END AS change_direction,
-    CASE
-        WHEN p.prev_sell_price IS NOT NULL AND p.prev_sell_price <> 0 AND t.type = 'sell' AND 
-             (c.current_sell_price + COALESCE(es.total_sell, 0)) <> p.prev_sell_price 
-             THEN ROUND(CAST(ABS((c.current_sell_price + COALESCE(es.total_sell, 0)) - p.prev_sell_price) / NULLIF(p.prev_sell_price, 0) * 100 AS numeric), 2)
-        WHEN p.prev_buy_price IS NOT NULL AND p.prev_buy_price <> 0 AND t.type = 'buy' AND 
-             (c.current_buy_price + COALESCE(es.total_buy, 0)) <> p.prev_buy_price 
-             THEN ROUND(CAST(ABS((c.current_buy_price + COALESCE(es.total_buy, 0)) - p.prev_buy_price) / NULLIF(p.prev_buy_price, 0) * 100 AS numeric), 2)
-        ELSE 0
-    END AS change_percentage
-FROM
-    current AS c
-CROSS JOIN (SELECT DISTINCT type FROM price) AS t
-LEFT JOIN prev AS p ON c.code = p.code
-LEFT JOIN excess_sums AS es ON c.code = es.code;
-
-
+    select code,type, value as final_price, to_char(current_timestamp, 'DD-MM-YYYY HH24:MI:SS')  as lastUpdate, 'no change' as change_direction, '0.0' as change_percentage   from excess  
 
         """
 
@@ -244,18 +143,189 @@ LEFT JOIN excess_sums AS es ON c.code = es.code;
         "parity": list(parity.values()),
     }
 
-    # result = [
-    #     Price(
-    #         code=code[0],
-    #         type=code[1],
-    #         price=code[2],
-    #         lastUpdate=code[3],
-    #         change_direction=code[4],
-    #         change_percentage=code[5]
-    #     )
-    #     for code in count
-    # ]
-    # return result
+# @app.get("/pricev2")
+# async def get_prices():
+#     load_dotenv()
+#     host = os.getenv("POSTGRES_HOST")
+#     database = os.getenv("DATABASE")
+#     user = os.getenv("POSTGRES_USER")
+#     password = os.getenv("POSTGRES_PASSWORD")
+#     conn = psycopg2.connect(host=host, database=database, user=user, password=password)
+#     cursor = conn.cursor()
+
+#     query = f"""
+#       WITH sell_prices AS (
+#     SELECT
+#         code,
+#         CAST(price AS numeric) AS sell_price,
+#         "lastUpdate",
+#         ROW_NUMBER() OVER (PARTITION BY code ORDER BY "lastUpdate" DESC) AS rn
+#     FROM
+#         price
+#     WHERE type = 'sell'
+# ),
+# buy_prices AS (
+#     SELECT
+#         code,
+#         CAST(price AS numeric) AS buy_price,
+#         "lastUpdate",
+#         ROW_NUMBER() OVER (PARTITION BY code ORDER BY "lastUpdate" DESC) AS rn
+#     FROM
+#         price
+#     WHERE type = 'buy'
+# ),
+# prev AS (
+#     SELECT
+#         code,
+#         sell_price AS prev_sell_price,
+#         buy_price AS prev_buy_price,
+#         "lastUpdate"
+#     FROM
+#         sell_prices
+#     FULL OUTER JOIN buy_prices USING (code, "lastUpdate")
+#     WHERE sell_prices.rn = 2 OR buy_prices.rn = 2
+# ),
+# current AS (
+#     SELECT
+#         code,
+#         sell_price AS current_sell_price,
+#         buy_price AS current_buy_price,
+#         "lastUpdate"
+#     FROM
+#         sell_prices
+#     FULL OUTER JOIN buy_prices USING (code, "lastUpdate")
+#     WHERE sell_prices.rn = 1 OR buy_prices.rn = 1
+# ),
+# excess_sums AS (
+#     SELECT
+#         code,
+#         SUM(CASE WHEN type = 'buy' THEN CAST(value AS numeric) ELSE 0 END) AS total_buy,
+#         SUM(CASE WHEN type = 'sell' THEN CAST(value AS numeric) ELSE 0 END) AS total_sell
+#     FROM
+#         excess
+#     GROUP BY
+#         code
+# )
+# SELECT
+#     c.code,
+#     t.type,
+#     CASE 
+#         WHEN c.code = 'TRYIRR' THEN 
+#             CASE t.type
+#                 WHEN 'buy' THEN
+#                     CASE
+#                         WHEN MOD(c.current_buy_price + COALESCE(es.total_buy, 0), 10) < 3 THEN FLOOR((c.current_buy_price + COALESCE(es.total_buy, 0)) / 10) * 10
+#                         WHEN MOD(c.current_buy_price + COALESCE(es.total_buy, 0), 10) BETWEEN 3 AND 7 THEN ROUND((c.current_buy_price + COALESCE(es.total_buy, 0)) / 5) * 5
+#                         ELSE CEIL((c.current_buy_price + COALESCE(es.total_buy, 0)) / 10) * 10
+#                     END
+#                 WHEN 'sell' THEN
+#                     CASE
+#                         WHEN MOD(c.current_sell_price + COALESCE(es.total_sell, 0), 10) < 3 THEN FLOOR((c.current_sell_price + COALESCE(es.total_sell, 0)) / 10) * 10
+#                         WHEN MOD(c.current_sell_price + COALESCE(es.total_sell, 0), 10) BETWEEN 3 AND 7 THEN ROUND((c.current_sell_price + COALESCE(es.total_sell, 0)) / 5) * 5
+#                         ELSE CEIL((c.current_sell_price + COALESCE(es.total_sell, 0)) / 10) * 10
+#                     END
+#             END
+#         ELSE 
+#             CASE t.type
+#                 WHEN 'buy' THEN ROUND((c.current_buy_price + COALESCE(es.total_buy, 0)) / 10) * 10
+#                 WHEN 'sell' THEN ROUND((c.current_sell_price + COALESCE(es.total_sell, 0)) / 10) * 10
+#             END
+#     END AS final_price,
+#     c."lastUpdate",
+#     CASE
+#         WHEN p.prev_sell_price > (c.current_sell_price + COALESCE(es.total_sell, 0)) THEN 'positive'
+#         WHEN p.prev_buy_price > (c.current_buy_price + COALESCE(es.total_buy, 0)) THEN 'positive'
+#         WHEN p.prev_sell_price < (c.current_sell_price + COALESCE(es.total_sell, 0)) THEN 'negative'
+#         WHEN p.prev_buy_price < (c.current_buy_price + COALESCE(es.total_buy, 0)) THEN 'negative'
+#         ELSE 'no change'
+#     END AS change_direction,
+#     CASE
+#         WHEN p.prev_sell_price IS NOT NULL AND p.prev_sell_price <> 0 AND t.type = 'sell' AND 
+#              (c.current_sell_price + COALESCE(es.total_sell, 0)) <> p.prev_sell_price 
+#              THEN ROUND(CAST(ABS((c.current_sell_price + COALESCE(es.total_sell, 0)) - p.prev_sell_price) / NULLIF(p.prev_sell_price, 0) * 100 AS numeric), 2)
+#         WHEN p.prev_buy_price IS NOT NULL AND p.prev_buy_price <> 0 AND t.type = 'buy' AND 
+#              (c.current_buy_price + COALESCE(es.total_buy, 0)) <> p.prev_buy_price 
+#              THEN ROUND(CAST(ABS((c.current_buy_price + COALESCE(es.total_buy, 0)) - p.prev_buy_price) / NULLIF(p.prev_buy_price, 0) * 100 AS numeric), 2)
+#         ELSE 0
+#     END AS change_percentage
+# FROM
+#     current AS c
+# CROSS JOIN (SELECT DISTINCT type FROM price) AS t
+# LEFT JOIN prev AS p ON c.code = p.code
+# LEFT JOIN excess_sums AS es ON c.code = es.code;
+
+
+
+#         """
+
+#     cursor.execute(query)
+#     cols = [desc[0] for desc in cursor.description]
+#     count = cursor.fetchall()
+
+#     cursor.close()
+#     conn.close()
+
+#     assets = {}
+#     gold = {}
+#     parity = {}
+
+#     for code in count:
+#         if code[0].endswith("IRR"):
+#             asset_data = assets.get(code[0])
+#             if not asset_data:
+#                 slug = code[0][
+#                     :-3
+#                 ].lower()  # Extract the slug by slicing the 'code' value
+#                 asset_data = assets[code[0]] = {
+#                     "code": code[0],
+#                     "lastUpdate": code[3],
+#                     "change_direction": code[4],
+#                     "change_percentage": code[5],
+#                     "prices": {},
+#                     "slug": slug,  # Add the 'slug' key
+#                 }
+#             asset_data["prices"][code[1]] = {"type": code[1], "price": code[2]}
+#         elif code[0].endswith("AYAR"):
+#             gold_data = gold.get(code[0])
+#             if not gold_data:
+#                 gold_data = gold[code[0]] = {
+#                     "code": code[0],
+#                     "lastUpdate": code[3],
+#                     "change_direction": code[4],
+#                     "change_percentage": code[5],
+#                     "prices": {},
+#                 }
+#             gold_data["prices"][code[1]] = {"type": code[1], "price": code[2]}
+#         else:
+#             parity_data = parity.get(code[0])
+#             if not parity_data:
+#                 parity_data = parity[code[0]] = {
+#                     "code": code[0],
+#                     "lastUpdate": code[3],
+#                     "change_direction": code[4],
+#                     "change_percentage": code[5],
+#                     "prices": {},
+#                 }
+#             parity_data["prices"][code[1]] = {"type": code[1], "price": code[2]}
+
+#     return {
+#         "assets": list(assets.values()),
+#         "gold": list(gold.values()),
+#         "parity": list(parity.values()),
+#     }
+
+#     # result = [
+#     #     Price(
+#     #         code=code[0],
+#     #         type=code[1],
+#     #         price=code[2],
+#     #         lastUpdate=code[3],
+#     #         change_direction=code[4],
+#     #         change_percentage=code[5]
+#     #     )
+#     #     for code in count
+#     # ]
+#     # return result
 
 
 @app.get("/price")
